@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Secret Santa 🎅</title>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+  <style>
+    body {
+      background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+      font-family: Arial, sans-serif;
+      color: white;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
+
+    .card {
+      background: #111;
+      padding: 30px;
+      border-radius: 15px;
+      width: 320px;
+      text-align: center;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    }
+
+    h1 {
+      margin-bottom: 10px;
+    }
+
+    p {
+      font-size: 14px;
+      opacity: 0.8;
+    }
+
+    button {
+      margin-top: 20px;
+      padding: 12px 20px;
+      font-size: 16px;
+      background: #e63946;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      background: gray;
+      cursor: not-allowed;
+    }
+
+    #result {
+      margin-top: 20px;
+      font-size: 20px;
+      color: #2ecc71;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="card">
+    <h1>🎄 Secret Santa 🎄</h1>
+    <p>Click only once. Your name will be locked forever.</p>
+    <button id="pickBtn">Generate Name</button>
+    <div id="result"></div>
+  </div>
+
+  <script>
+    // 🔥 REPLACE THIS WITH YOUR FIREBASE CONFIG
+    const firebaseConfig = {
+  apiKey: "AIzaSyAZHXvGAJ_xqi-HHH0MhVKS-zYdPbSqvPU",
+  authDomain: "secret-santa-5b7ec.firebaseapp.com",
+  projectId: "secret-santa-5b7ec",
+  storageBucket: "secret-santa-5b7ec.firebasestorage.app",
+  messagingSenderId: "398323851610",
+  appId: "1:398323851610:web:e285e322d94de31f6f1363",
+  measurementId: "G-MSZ5VZCNGG"
+};
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    const btn = document.getElementById("pickBtn");
+    const result = document.getElementById("result");
+
+    // Unique ID per device
+    let deviceId = localStorage.getItem("secretSantaDevice");
+    if (!deviceId) {
+      deviceId = crypto.randomUUID();
+      localStorage.setItem("secretSantaDevice", deviceId);
+    }
+
+    btn.addEventListener("click", async () => {
+      btn.disabled = true;
+
+      const userRef = db.collection("users").doc(deviceId);
+      const userSnap = await userRef.get();
+
+      if (userSnap.exists) {
+        result.innerText = "🎁 You already picked your name!";
+        return;
+      }
+
+      const namesRef = db.collection("config").doc("names");
+
+      try {
+        await db.runTransaction(async (tx) => {
+          const snap = await tx.get(namesRef);
+          const names = snap.data().remaining;
+
+          if (!names || names.length === 0) {
+            result.innerText = "❌ All names are taken!";
+            return;
+          }
+
+          const index = Math.floor(Math.random() * names.length);
+          const pickedName = names.splice(index, 1)[0];
+
+          tx.update(namesRef, { remaining: names });
+          tx.set(userRef, { picked: pickedName });
+
+          result.innerText = "🎅 You got: " + pickedName;
+        });
+      } catch (e) {
+        result.innerText = "⚠️ Something went wrong. Try again.";
+        btn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
