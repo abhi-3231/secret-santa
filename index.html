@@ -19,28 +19,25 @@
       height: 100vh;
       margin: 0;
     }
-
     .card {
       background: #111;
       padding: 30px;
       border-radius: 15px;
-      width: 320px;
+      width: 330px;
       text-align: center;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
     }
-
-    h1 {
-      margin-bottom: 10px;
-    }
-
-    p {
+    input {
+      width: 100%;
+      padding: 10px;
+      margin-top: 15px;
+      border-radius: 5px;
+      border: none;
       font-size: 14px;
-      opacity: 0.8;
     }
-
     button {
       margin-top: 20px;
-      padding: 12px 20px;
+      padding: 12px;
+      width: 100%;
       font-size: 16px;
       background: #e63946;
       color: white;
@@ -48,15 +45,12 @@
       border-radius: 6px;
       cursor: pointer;
     }
-
     button:disabled {
       background: gray;
-      cursor: not-allowed;
     }
-
     #result {
       margin-top: 20px;
-      font-size: 20px;
+      font-size: 18px;
       color: #2ecc71;
     }
   </style>
@@ -64,14 +58,18 @@
 
 <body>
   <div class="card">
-    <h1>🎄 Secret Santa 🎄</h1>
-    <p>Click only once. Your name will be locked forever.</p>
+    <h2>🎄 Secret Santa 🎄</h2>
+    <p>Enter your name and click once.</p>
+
+    <input id="username" placeholder="Enter your name exactly" />
+
     <button id="pickBtn">Generate Name</button>
+
     <div id="result"></div>
   </div>
 
   <script>
-    // 🔥 REPLACE THIS WITH YOUR FIREBASE CONFIG
+    // 🔥 FIREBASE CONFIG (PASTE YOURS)
     const firebaseConfig = {
   apiKey: "AIzaSyAZHXvGAJ_xqi-HHH0MhVKS-zYdPbSqvPU",
   authDomain: "secret-santa-5b7ec.firebaseapp.com",
@@ -87,22 +85,29 @@
 
     const btn = document.getElementById("pickBtn");
     const result = document.getElementById("result");
+    const usernameInput = document.getElementById("username");
 
-    // Unique ID per device
     let deviceId = localStorage.getItem("secretSantaDevice");
     if (!deviceId) {
       deviceId = crypto.randomUUID();
       localStorage.setItem("secretSantaDevice", deviceId);
     }
 
-    btn.addEventListener("click", async () => {
+    btn.onclick = async () => {
+      const username = usernameInput.value.trim();
+
+      if (!username) {
+        alert("Please enter your name.");
+        return;
+      }
+
       btn.disabled = true;
 
       const userRef = db.collection("users").doc(deviceId);
       const userSnap = await userRef.get();
 
       if (userSnap.exists) {
-        result.innerText = "🎁 You already picked your name!";
+        result.innerText = "🎁 You already picked!";
         return;
       }
 
@@ -111,26 +116,36 @@
       try {
         await db.runTransaction(async (tx) => {
           const snap = await tx.get(namesRef);
-          const names = snap.data().remaining;
+          let names = snap.data().remaining;
 
-          if (!names || names.length === 0) {
-            result.innerText = "❌ All names are taken!";
-            return;
+          // ❌ Remove user's own name
+          names = names.filter(n => n !== username);
+
+          if (names.length === 0) {
+            throw new Error("No valid names left.");
           }
 
           const index = Math.floor(Math.random() * names.length);
-          const pickedName = names.splice(index, 1)[0];
+          const picked = names[index];
 
-          tx.update(namesRef, { remaining: names });
-          tx.set(userRef, { picked: pickedName });
+          // Remove picked name globally
+          const updatedRemaining = snap.data().remaining.filter(n => n !== picked);
 
-          result.innerText = "🎅 You got: " + pickedName;
+          tx.update(namesRef, { remaining: updatedRemaining });
+          tx.set(userRef, {
+            user: username,
+            picked: picked
+          });
+
+          result.innerText = "🎅 You got: " + picked;
         });
       } catch (e) {
-        result.innerText = "⚠️ Something went wrong. Try again.";
+        console.error(e);
+        result.innerText = "⚠️ " + e.message;
         btn.disabled = false;
       }
-    });
+    };
   </script>
 </body>
 </html>
+
